@@ -1,7 +1,13 @@
 package com.example.ejercicio.controller;
 
 import com.example.ejercicio.dto.AuthRequestDTO;
+import com.example.ejercicio.exception.UserExistsException;
+import com.example.ejercicio.model.Usuario;
 import com.example.ejercicio.service.UsuarioService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.security.auth.message.AuthException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -31,6 +37,21 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (AuthException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
+        }
+    }
+
+    @PostMapping("/create")
+    @Operation(summary = "Registrar un nuevo usuario")
+    @ApiResponse(responseCode = "200", description = "Usuario registrado con éxito")
+    @ApiResponse(responseCode = "400", description = "Formato de correo electrónico o contraseña inválido", content = @Content(schema = @Schema(example = "Formato de correo electrónico inválido")))
+    @ApiResponse(responseCode = "409", description = "El correo ya está registrado", content = @Content(schema = @Schema(example = "El correo ya registrado")))
+    public ResponseEntity<?> crearUsuario(@RequestBody Usuario usuario) throws Exception {
+        try {
+            return ResponseEntity.ok(usuarioService.crearUsuario(usuario));
+        } catch (UserExistsException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
 }

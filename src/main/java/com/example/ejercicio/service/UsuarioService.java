@@ -18,6 +18,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -125,10 +127,22 @@ public class UsuarioService {
      * @return Una lista de CreateResponseDTO con los detalles de los usuarios.
      */
     public List<CreateResponseDTO> findAll() {
-        // Obtiene todos los usuarios y convierte las entidades a DTOs
-        return usuarioRepository.findAll().stream()
-                .map(this::construirResponseDTO)
-                .collect(Collectors.toList());
+        try {
+            List<Usuario> usuarios = usuarioRepository.findAll();
+            // Verificamos si la lista obtenida está vacía
+            if (usuarios.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            // Convierte las entidades a DTOs
+            return usuarios.stream()
+                    .map(this::construirResponseDTO)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            // Manejar cualquier otra excepción que pueda ocurrir
+            new RuntimeException(e.getMessage());
+            return Collections.emptyList();
+        }
     }
 
     /**
@@ -151,12 +165,15 @@ public class UsuarioService {
         usuario.setCorreo(usuarioActualizado.getCorreo());
         usuario.setPassword(passwordEncoder.encodePassword(usuarioActualizado.getPassword()));
         usuario.setActivo(usuarioActualizado.isActivo());
-        usuario.setToken(usuarioActualizado.getToken());
         usuario.setModificado(LocalDateTime.now());
 
         // Actualiza la lista de teléfonos del usuario
         usuario.getTelefonos().clear(); // Borra los teléfonos actuales
         usuarioActualizado.getTelefonos().forEach(usuario::addPhone); // Agrega nuevos teléfonos
+
+        // Genera un token JWT para el usuario actualizado
+        String jwtToken = jwtService.generarToken(usuario.getCorreo());
+        usuario.setToken(jwtToken);
 
         // Guarda el usuario actualizado en el repositorio
         Usuario usuarioGuardado = usuarioRepository.save(usuario);
@@ -217,7 +234,12 @@ public class UsuarioService {
                     usuario.getTelefonos().addAll(telefonosActualizados);
                     break;
             }
+
         });
+
+        // Genera un nuevo token JWT con el correo posiblemente actualizado
+        String jwtToken = jwtService.generarToken(usuario.getCorreo());
+        usuario.setToken(jwtToken);
 
         // Actualiza la fecha de modificación del usuario
         usuario.setModificado(LocalDateTime.now());
