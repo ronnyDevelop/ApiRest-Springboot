@@ -2,7 +2,6 @@ package com.example.ejercicio.model;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
@@ -12,7 +11,6 @@ import org.hibernate.annotations.UuidGenerator;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -34,14 +32,4 @@ public class Usuario {
 
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Telefono> telefonos;
-
-    public void addPhone(Telefono telefono) {
-        this.telefonos.add(telefono);
-        telefono.setUsuario(this);
-    }
-
-    public void removePhone(Telefono telefono) {
-        this.telefonos.remove(telefono);
-        telefono.setUsuario(null);
-    }
 }

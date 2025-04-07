@@ -2,6 +2,8 @@ package com.example.ejercicio.service;
 
 import com.example.ejercicio.dto.AuthRequestDTO;
 import com.example.ejercicio.dto.CreateResponseDTO;
+import com.example.ejercicio.dto.UsuarioDTO;
+import com.example.ejercicio.dto.TelefonoDTO;
 import com.example.ejercicio.model.Telefono;
 import com.example.ejercicio.model.Usuario;
 import com.example.ejercicio.repository.TelefonoRepository;
@@ -18,10 +20,11 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -53,37 +56,55 @@ public class UsuarioService {
     /**
      * Crea un nuevo usuario en el sistema.
      *
-     * @param usuario El objeto Usuario a ser creado.
+     * @param usuarioDTO El objeto Usuario a ser creado.
      * @return Un objeto CreateResponseDTO con los detalles del usuario creado.
      */
-    public CreateResponseDTO crearUsuario(Usuario usuario) {
+    public CreateResponseDTO crearUsuario(UsuarioDTO usuarioDTO) {
         // Valida el correo electrónico y la contraseña del usuario
-        validarCorreoYContraseña(usuario.getCorreo(), usuario.getPassword());
+        validarCorreoYContraseña(usuarioDTO.getCorreo(), usuarioDTO.getPassword());
+
+        //Construye el usuario a partir del dto
+        Usuario usuario = construirUsuarioDesdeDTO(usuarioDTO);
 
         // Genera un token JWT para el nuevo usuario
-        String jwtToken = jwtService.generarToken(usuario.getCorreo());
+        String jwtToken = jwtService.generarToken(usuarioDTO.getCorreo());
 
-        // Codifica la contraseña del usuario
-        usuario.setPassword(passwordEncoder.encodePassword(usuario.getPassword()));
-
-        // Establece las propiedades de fecha y activa el usuario
+        // Establece las propiedades de fecha, token y activa el usuario
         usuario.setCreado(LocalDateTime.now());
         usuario.setUltimoLogin(LocalDateTime.now());
         usuario.setToken(jwtToken);
         usuario.setActivo(true);
 
-        // Guarda el usuario en el repositorio
+        // Guarda el usuario y telefonos
         Usuario finalUsuario = usuarioRepository.save(usuario);
+        guardarTelefonos(finalUsuario, usuarioDTO.getTelefonos());
 
-        // Asocia y guarda los teléfonos del usuario
-        List<Telefono> telefonos = usuario.getTelefonos();
-        if (telefonos != null) {
-            telefonos.forEach(telefono -> telefono.setUsuario(finalUsuario));
-            telefonoRepository.saveAll(telefonos);
-        }
 
         // Devuelve la respuesta construida para el usuario creado
         return construirResponseDTO(finalUsuario);
+    }
+
+    private Usuario construirUsuarioDesdeDTO(UsuarioDTO usuarioDTO) {
+        Usuario usuario = new Usuario();
+        usuario.setNombre(usuarioDTO.getNombre());
+        usuario.setCorreo(usuarioDTO.getCorreo());
+        usuario.setPassword(passwordEncoder.encodePassword(usuarioDTO.getPassword()));
+        return usuario;
+    }
+
+    private void guardarTelefonos(Usuario usuario, List<TelefonoDTO> telefonosDTO) {
+        if (telefonosDTO != null && !telefonosDTO.isEmpty()) {
+            List<Telefono> telefonos = new ArrayList<>();
+            for (TelefonoDTO telefonoDTO : telefonosDTO) {
+                Telefono telefono = new Telefono();
+                telefono.setNumero(telefonoDTO.getNumero());
+                telefono.setCodigoCiudad(telefonoDTO.getCodigoCiudad());
+                telefono.setCodigoPais(telefonoDTO.getCodigoPais());
+                telefono.setUsuario(usuario);
+                telefonos.add(telefono);
+            }
+            telefonoRepository.saveAll(telefonos);
+        }
     }
 
     /**
@@ -152,7 +173,7 @@ public class UsuarioService {
      * @param usuarioActualizado El objeto Usuario con la nueva información.
      * @return Un objeto CreateResponseDTO con los detalles del usuario actualizado.
      */
-    public CreateResponseDTO updateUsuario(String id, Usuario usuarioActualizado) {
+    public CreateResponseDTO updateUsuario(String id, UsuarioDTO usuarioActualizado) {
         // Busca al usuario por su ID y lanza excepción si no lo encuentra
         Usuario usuario = usuarioRepository.findById(UUID.fromString(id))
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
@@ -164,12 +185,18 @@ public class UsuarioService {
         usuario.setNombre(usuarioActualizado.getNombre());
         usuario.setCorreo(usuarioActualizado.getCorreo());
         usuario.setPassword(passwordEncoder.encodePassword(usuarioActualizado.getPassword()));
-        usuario.setActivo(usuarioActualizado.isActivo());
         usuario.setModificado(LocalDateTime.now());
 
         // Actualiza la lista de teléfonos del usuario
-        usuario.getTelefonos().clear(); // Borra los teléfonos actuales
-        usuarioActualizado.getTelefonos().forEach(usuario::addPhone); // Agrega nuevos teléfonos
+        usuario.getTelefonos().clear();
+        usuarioActualizado.getTelefonos().forEach(dto -> {
+            Telefono telefono = new Telefono();
+            telefono.setNumero(dto.getNumero());
+            telefono.setCodigoCiudad(dto.getCodigoCiudad());
+            telefono.setCodigoPais(dto.getCodigoPais());
+            telefono.setUsuario(usuario);
+            usuario.getTelefonos().add(telefono);
+        });
 
         // Genera un token JWT para el usuario actualizado
         String jwtToken = jwtService.generarToken(usuario.getCorreo());
@@ -183,15 +210,24 @@ public class UsuarioService {
     }
 
     /**
-     * Elimina un usuario del sistema por su ID.
+     * Elimina un usuario del sistema por su id.
      *
      * @param id El ID del usuario a eliminar.
+     * @return
      */
-    public void deleteUsuario(String id) {
-        // Elimina el usuario por su ID en el repositorio
-        usuarioRepository.deleteById(UUID.fromString(id));
-    }
+    public boolean deleteUsuario(String id) {
+        // Paso 1: Buscar el usuario por su correo
+        Optional<Usuario> usuario = usuarioRepository.findById(UUID.fromString(id));
 
+        if (usuario.isPresent()) {
+            Usuario usuarioDelete = usuario.get();
+            usuarioRepository.delete(usuarioDelete);
+
+            return true;
+        } else {
+            return false;
+        }
+    }
     /**
      * Actualiza parcialmente un usuario existente en el sistema.
      *
@@ -301,5 +337,3 @@ public class UsuarioService {
                 .build();
     }
 }
-
-
