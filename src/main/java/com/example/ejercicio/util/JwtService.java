@@ -1,4 +1,4 @@
-package com.example.ejercicio.service;
+package com.example.ejercicio.util;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;

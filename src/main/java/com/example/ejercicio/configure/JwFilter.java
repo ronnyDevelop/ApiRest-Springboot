@@ -1,7 +1,7 @@
 package com.example.ejercicio.configure;
 
-import com.example.ejercicio.service.JwtService;
-import com.example.ejercicio.service.UsuarioDetalleService;
+import com.example.ejercicio.util.JwtService;
+import com.example.ejercicio.util.UsuarioDetalleService;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

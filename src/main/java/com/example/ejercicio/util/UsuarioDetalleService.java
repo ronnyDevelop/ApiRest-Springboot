@@ -1,6 +1,7 @@
-package com.example.ejercicio.service;
+package com.example.ejercicio.util;
 
 import com.example.ejercicio.model.Usuario;
+import com.example.ejercicio.service.impl.UsuarioServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -17,7 +18,7 @@ import java.util.Collections;
 public class UsuarioDetalleService implements UserDetailsService {
 
     // Dependencia al servicio UsuarioService para realizar operaciones relacionadas con los usuarios.
-    private final UsuarioService usuarioService;
+    private final UsuarioServiceImpl usuarioService;
 
     /**
      * Constructor que inyecta automáticamente UsuarioService.
@@ -25,7 +26,7 @@ public class UsuarioDetalleService implements UserDetailsService {
      * @param usuarioService el servicio que maneja operaciones de usuario.
      */
     @Autowired
-    public UsuarioDetalleService(UsuarioService usuarioService) {
+    public UsuarioDetalleService(UsuarioServiceImpl usuarioService) {
         // Asigna el servicio de usuario inyectado a la propiedad local.
         this.usuarioService = usuarioService;
     }

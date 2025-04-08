@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.security.auth.message.AuthException;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,7 +31,7 @@ public class AuthController {
     private AuthenticationManager authenticationManager;
 
     @PostMapping("/login")
-    public ResponseEntity<?> autenticarUsuario(@RequestBody AuthRequestDTO authRequest) {
+    public ResponseEntity<?> autenticarUsuario(@Valid @RequestBody AuthRequestDTO authRequest) {
         try {
             return ResponseEntity.ok(usuarioService.login(authRequest, authenticationManager));
         } catch (UsernameNotFoundException e) {
@@ -47,7 +48,7 @@ public class AuthController {
     @ApiResponse(responseCode = "409", description = "El correo ya está registrado", content = @Content(schema = @Schema(example = "El correo ya registrado")))
     public ResponseEntity<?> crearUsuario(@RequestBody UsuarioDTO usuarioDTO) {
         try {
-            return ResponseEntity.ok(usuarioService.crearUsuario(usuarioDTO));
+            return ResponseEntity.status(HttpStatus.OK).body(usuarioService.crearUsuario(usuarioDTO));
         } catch (UserExistsException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         } catch (IllegalArgumentException e) {

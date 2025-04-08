@@ -1,6 +1,6 @@
 package com.example.ejercicio.configure;
 
-import com.example.ejercicio.service.UsuarioDetalleService;
+import com.example.ejercicio.util.UsuarioDetalleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

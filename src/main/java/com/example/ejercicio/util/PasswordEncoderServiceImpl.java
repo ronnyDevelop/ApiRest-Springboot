@@ -1,4 +1,4 @@
-package com.example.ejercicio.service;
+package com.example.ejercicio.util;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
  * Servicio para codificar contraseñas usando BCrypt.
  */
 @Service
-public class PasswordEncoderService {
+public class PasswordEncoderServiceImpl {
 
     // Instancia de PasswordEncoder para manejar la codificación.
     private final PasswordEncoder passwordEncoder;
@@ -16,7 +16,7 @@ public class PasswordEncoderService {
     /**
      * Constructor que inicializa el PasswordEncoder con una instancia de BCryptPasswordEncoder.
      */
-    public PasswordEncoderService() {
+    public PasswordEncoderServiceImpl() {
         // Crear una nueva instancia de BCryptPasswordEncoder que será usada para codificar las contraseñas.
         this.passwordEncoder = new BCryptPasswordEncoder();
     }
