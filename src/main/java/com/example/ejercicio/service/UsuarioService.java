@@ -20,7 +20,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -30,217 +29,238 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Servicio para la gestión de usuarios en el sistema.
+ * Servicio para gestionar usuarios.
  */
 @Service
 public class UsuarioService {
 
+    // Inyecta la dependencia UsuarioRepository para realizar operaciones CRUD con usuarios.
     @Autowired
-    private UsuarioRepository usuarioRepository; // Repositorio para la gestión de entidades Usuario
+    private UsuarioRepository usuarioRepository;
 
+    // Inyecta la dependencia TelefonoRepository para realizar operaciones CRUD con teléfonos.
     @Autowired
-    private TelefonoRepository telefonoRepository; // Repositorio para la gestión de entidades Telefono
+    private TelefonoRepository telefonoRepository;
 
+    // Inyecta el servicio para codificar contraseñas.
     @Autowired
-    private PasswordEncoderService passwordEncoder; // Servicio para codificar contraseñas
+    private PasswordEncoderService passwordEncoder;
 
+    // Inyecta el servicio para generar y gestionar tokens JWT.
     @Autowired
-    private JwtService jwtService; // Servicio para manejar tokens JWT
+    private JwtService jwtService;
 
+    // Carga la expresión regular para validar correos electrónicos desde las propiedades de configuración.
     @Value("${email.regex}")
-    private String emailRegex; // Expresión regular para validar correos electrónicos
+    private String emailRegex;
 
+    // Carga la expresión regular para validar contraseñas desde las propiedades de configuración.
     @Value("${password.regex}")
-    private String passwordRegex; // Expresión regular para validar contraseñas
+    private String passwordRegex;
 
     /**
-     * Crea un nuevo usuario en el sistema.
+     * Crea un nuevo usuario a partir de un DTO.
      *
-     * @param usuarioDTO El objeto Usuario a ser creado.
-     * @return Un objeto CreateResponseDTO con los detalles del usuario creado.
+     * @param usuarioDTO el DTO que contiene la información del usuario a crear
+     * @return un DTO de respuesta que representa al usuario creado
      */
     public CreateResponseDTO crearUsuario(UsuarioDTO usuarioDTO) {
-        // Valida el correo electrónico y la contraseña del usuario
+        // Valida el formato del correo y la contraseña proporcionados.
         validarCorreoYContraseña(usuarioDTO.getCorreo(), usuarioDTO.getPassword());
-
-        //Construye el usuario a partir del dto
+        // Construye un objeto Usuario desde el DTO.
         Usuario usuario = construirUsuarioDesdeDTO(usuarioDTO);
-
-        // Genera un token JWT para el nuevo usuario
+        // Genera un token JWT para el usuario.
         String jwtToken = jwtService.generarToken(usuarioDTO.getCorreo());
-
-        // Establece las propiedades de fecha, token y activa el usuario
+        // Establece la fecha de creación y el último inicio de sesión al tiempo actual.
         usuario.setCreado(LocalDateTime.now());
         usuario.setUltimoLogin(LocalDateTime.now());
+        // Asigna el token JWT al usuario y lo marca como activo.
         usuario.setToken(jwtToken);
         usuario.setActivo(true);
 
-        // Guarda el usuario y telefonos
+        // Guarda el usuario en el repositorio y obtiene la instancia final guardada.
         Usuario finalUsuario = usuarioRepository.save(usuario);
+        // Guarda los teléfonos asociados al usuario.
         guardarTelefonos(finalUsuario, usuarioDTO.getTelefonos());
 
-
-        // Devuelve la respuesta construida para el usuario creado
+        // Construye y retorna un DTO de respuesta a partir del usuario guardado.
         return construirResponseDTO(finalUsuario);
     }
 
+    /**
+     * Construye un objeto Usuario desde un DTO de Usuario.
+     *
+     * @param usuarioDTO el DTO que contiene la información del usuario
+     * @return un objeto Usuario
+     */
     private Usuario construirUsuarioDesdeDTO(UsuarioDTO usuarioDTO) {
-        Usuario usuario = new Usuario();
-        usuario.setNombre(usuarioDTO.getNombre());
-        usuario.setCorreo(usuarioDTO.getCorreo());
-        usuario.setPassword(passwordEncoder.encodePassword(usuarioDTO.getPassword()));
-        return usuario;
+        return Usuario.builder()
+                .nombre(usuarioDTO.getNombre())
+                .correo(usuarioDTO.getCorreo())
+                // Codifica la contraseña proporcionada.
+                .password(passwordEncoder.encodePassword(usuarioDTO.getPassword()))
+                .build();
     }
 
+    /**
+     * Guarda una lista de teléfonos en el repositorio, asociados a un usuario.
+     *
+     * @param usuario el objeto Usuario al que se asociarán los teléfonos
+     * @param telefonosDTO la lista de DTOs de teléfono a guardar
+     */
     private void guardarTelefonos(Usuario usuario, List<TelefonoDTO> telefonosDTO) {
+        // Verifica si la lista de teléfonos no es nula ni está vacía.
         if (telefonosDTO != null && !telefonosDTO.isEmpty()) {
-            List<Telefono> telefonos = new ArrayList<>();
-            for (TelefonoDTO telefonoDTO : telefonosDTO) {
-                Telefono telefono = new Telefono();
-                telefono.setNumero(telefonoDTO.getNumero());
-                telefono.setCodigoCiudad(telefonoDTO.getCodigoCiudad());
-                telefono.setCodigoPais(telefonoDTO.getCodigoPais());
-                telefono.setUsuario(usuario);
-                telefonos.add(telefono);
-            }
+            List<Telefono> telefonos = telefonosDTO.stream()
+                    .map(dto -> Telefono.builder()
+                            .numero(dto.getNumero())
+                            .codigoCiudad(dto.getCodigoCiudad())
+                            .codigoPais(dto.getCodigoPais())
+                            .usuario(usuario)
+                            .build())
+                    // Convierte los DTOs en objetos de teléfono.
+                    .collect(Collectors.toList());
+            // Guarda todos los teléfonos en el repositorio.
             telefonoRepository.saveAll(telefonos);
         }
     }
 
     /**
-     * Realiza el inicio de sesión para un usuario.
+     * Realiza el proceso de inicio de sesión para un usuario.
      *
-     * @param authRequest El DTO que contiene las credenciales de autenticación.
-     * @param authenticationManager El manager de autenticación.
-     * @return Un objeto CreateResponseDTO con los detalles del usuario autenticado.
-     * @throws AuthException Si las credenciales son inválidas.
+     * @param authRequest el objeto DTO que contiene las credenciales de autenticación
+     * @param authenticationManager el gestor de autenticaciones
+     * @return un DTO de respuesta que representa al usuario autenticado
+     * @throws AuthException si las credenciales son inválidas
      */
     public CreateResponseDTO login(AuthRequestDTO authRequest, AuthenticationManager authenticationManager) throws AuthException {
         try {
-            // Autentica al usuario con el manager de autenticación
+            // Autentica las credenciales proporcionadas.
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(authRequest.getCorreo(), authRequest.getPassword()));
+            // Establece la autenticación en el contexto de seguridad.
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // Genera un token JWT para el usuario autenticado
+            // Genera un token JWT para el usuario autenticado.
             String jwtToken = jwtService.generarToken(authRequest.getCorreo());
-
-            // Busca al usuario por su correo electrónico
+            // Busca el usuario por correo electrónico.
             Usuario usuario = buscarPorEmail(authRequest.getCorreo());
             if (usuario == null) {
                 throw new UsernameNotFoundException("Usuario no encontrado");
             }
 
-            // Actualiza el último inicio de sesión y guarda el usuario
+            // Actualiza el último inicio de sesión del usuario.
             usuario.setUltimoLogin(LocalDateTime.now());
+            // Guarda los cambios en el repositorio.
             Usuario usuarioGuardado = usuarioRepository.save(usuario);
 
-            // Retorna la respuesta del usuario autenticado con el token JWT
-            return construirResponseDTO(usuarioGuardado).toBuilder().token(jwtToken).build();
+            // Construye y retorna un DTO de respuesta con el token incluido.
+            return construirResponseDTO(usuarioGuardado)
+                    .toBuilder()
+                    .token(jwtToken)
+                    .build();
         } catch (AuthenticationException e) {
             throw new AuthException("Credenciales inválidas");
         }
     }
 
     /**
-     * Obtiene todos los usuarios del sistema.
+     * Retorna una lista de todos los usuarios existentes.
      *
-     * @return Una lista de CreateResponseDTO con los detalles de los usuarios.
+     * @return lista de DTOs de respuesta representando a cada usuario
      */
     public List<CreateResponseDTO> findAll() {
         try {
+            // Busca todos los usuarios en el repositorio.
             List<Usuario> usuarios = usuarioRepository.findAll();
-            // Verificamos si la lista obtenida está vacía
             if (usuarios.isEmpty()) {
                 return Collections.emptyList();
             }
 
-            // Convierte las entidades a DTOs
+            // Construye una lista de DTOs de respuesta para cada usuario encontrado.
             return usuarios.stream()
                     .map(this::construirResponseDTO)
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            // Manejar cualquier otra excepción que pueda ocurrir
-            new RuntimeException(e.getMessage());
-            return Collections.emptyList();
+            throw new RuntimeException(e.getMessage());
         }
     }
 
     /**
-     * Actualiza la información de un usuario existente.
+     * Actualiza la información de un usuario existente, encontrado por ID.
      *
-     * @param id El ID del usuario a actualizar.
-     * @param usuarioActualizado El objeto Usuario con la nueva información.
-     * @return Un objeto CreateResponseDTO con los detalles del usuario actualizado.
+     * @param id el identificador del usuario a actualizar
+     * @param usuarioActualizado el DTO que contiene la información actualizada
+     * @return un DTO de respuesta que representa al usuario actualizado
      */
     public CreateResponseDTO updateUsuario(String id, UsuarioDTO usuarioActualizado) {
-        // Busca al usuario por su ID y lanza excepción si no lo encuentra
+        // Busca el usuario por ID, o lanza una excepción si no es encontrado.
         Usuario usuario = usuarioRepository.findById(UUID.fromString(id))
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        // Valida el correo y la contraseña actualizada
+        // Valida el formato del correo y la contraseña proporcionados.
         validarCorreoYContraseña(usuarioActualizado.getCorreo(), usuarioActualizado.getPassword());
 
-        // Actualiza las propiedades del usuario con las nuevas informaciones
+        // Actualiza la información del usuario.
         usuario.setNombre(usuarioActualizado.getNombre());
         usuario.setCorreo(usuarioActualizado.getCorreo());
         usuario.setPassword(passwordEncoder.encodePassword(usuarioActualizado.getPassword()));
         usuario.setModificado(LocalDateTime.now());
 
-        // Actualiza la lista de teléfonos del usuario
+        // Borra y actualiza la lista de teléfonos del usuario.
         usuario.getTelefonos().clear();
         usuarioActualizado.getTelefonos().forEach(dto -> {
-            Telefono telefono = new Telefono();
-            telefono.setNumero(dto.getNumero());
-            telefono.setCodigoCiudad(dto.getCodigoCiudad());
-            telefono.setCodigoPais(dto.getCodigoPais());
-            telefono.setUsuario(usuario);
+            Telefono telefono = Telefono.builder()
+                    .numero(dto.getNumero())
+                    .codigoCiudad(dto.getCodigoCiudad())
+                    .codigoPais(dto.getCodigoPais())
+                    .usuario(usuario)
+                    .build();
             usuario.getTelefonos().add(telefono);
         });
 
-        // Genera un token JWT para el usuario actualizado
+        // Genera un nuevo token JWT y lo asigna al usuario.
         String jwtToken = jwtService.generarToken(usuario.getCorreo());
         usuario.setToken(jwtToken);
 
-        // Guarda el usuario actualizado en el repositorio
+        // Guarda el usuario actualizado en el repositorio.
         Usuario usuarioGuardado = usuarioRepository.save(usuario);
 
-        // Devuelve la respuesta construida para el usuario actualizado
+        // Construye y retorna un DTO de respuesta a partir del usuario guardado.
         return construirResponseDTO(usuarioGuardado);
     }
 
     /**
-     * Elimina un usuario del sistema por su id.
+     * Elimina un usuario por ID.
      *
-     * @param id El ID del usuario a eliminar.
-     * @return
+     * @param id el identificador del usuario a eliminar
+     * @return true si el usuario fue eliminado exitosamente, false si el usuario no fue encontrado
      */
     public boolean deleteUsuario(String id) {
-        // Paso 1: Buscar el usuario por su correo
+        // Busca el usuario por ID.
         Optional<Usuario> usuario = usuarioRepository.findById(UUID.fromString(id));
-
         if (usuario.isPresent()) {
-            Usuario usuarioDelete = usuario.get();
-            usuarioRepository.delete(usuarioDelete);
-
+            // Elimina el usuario si existe.
+            usuarioRepository.delete(usuario.get());
             return true;
         } else {
             return false;
         }
     }
+
     /**
-     * Actualiza parcialmente un usuario existente en el sistema.
+     * Actualiza parcialmente la información de un usuario existente utilizando un mapa de cambios.
      *
-     * @param id El ID del usuario a actualizar parcialmente.
-     * @param updates Un mapa de actualización con los campos y sus nuevos valores.
-     * @return Un objeto CreateResponseDTO con los detalles del usuario actualizado.
+     * @param id el identificador del usuario a actualizar
+     * @param updates un mapa que contiene los cambios a aplicar
+     * @return un DTO de respuesta que representa al usuario actualizado
      */
     public CreateResponseDTO patchUsuario(String id, Map<String, Object> updates) {
-        // Busca al usuario por su ID y lanza excepción si no lo encuentra
+        // Busca el usuario por ID, o lanza una excepción si no es encontrado.
         Usuario usuario = usuarioRepository.findById(UUID.fromString(id))
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        // Itera sobre las actualizaciones y aplica los cambios
+        // Aplica los cambios al usuario según el mapa de actualizaciones.
         updates.forEach((clave, valor) -> {
             switch (clave) {
                 case "nombre":
@@ -256,77 +276,73 @@ public class UsuarioService {
                     usuario.setActivo((Boolean) valor);
                     break;
                 case "telefonos":
-                    // Crea una lista de teléfonos actualizados
                     List<Telefono> telefonosActualizados = ((List<Map<String, Object>>) valor).stream()
-                            .map(dto -> new Telefono(
-                                    (String) dto.get("numero"),
-                                    (String) dto.get("codigoCiudad"),
-                                    (String) dto.get("codigoPais"),
-                                    usuario
-                            ))
+                            .map(dto -> Telefono.builder()
+                                    .numero((String) dto.get("numero"))
+                                    .codigoCiudad((String) dto.get("codigoCiudad"))
+                                    .codigoPais((String) dto.get("codigoPais"))
+                                    .usuario(usuario)
+                                    .build())
                             .collect(Collectors.toList());
-                    // Limpia teléfonos existentes y agrega los nuevos
                     usuario.getTelefonos().clear();
                     usuario.getTelefonos().addAll(telefonosActualizados);
                     break;
+                default:
+                    throw new RuntimeException("Información desconocida");
             }
-
         });
 
-        // Genera un nuevo token JWT con el correo posiblemente actualizado
+        // Genera un nuevo token JWT y lo asigna al usuario.
         String jwtToken = jwtService.generarToken(usuario.getCorreo());
         usuario.setToken(jwtToken);
-
-        // Actualiza la fecha de modificación del usuario
+        // Actualiza la fecha de modificación del usuario.
         usuario.setModificado(LocalDateTime.now());
 
-        // Guarda el usuario actualizado en el repositorio
+        // Guarda el usuario actualizado en el repositorio.
         Usuario usuarioGuardado = usuarioRepository.save(usuario);
 
-        // Devuelve la respuesta construida para el usuario actualizado
+        // Construye y retorna un DTO de respuesta a partir del usuario guardado.
         return construirResponseDTO(usuarioGuardado);
     }
 
     /**
-     * Busca un usuario por su correo electrónico.
+     * Busca un usuario por correo electrónico.
      *
-     * @param email El correo electrónico del usuario.
-     * @return La entidad Usuario correspondiente al correo.
+     * @param email el correo electrónico del usuario que se busca
+     * @return el usuario encontrado o null si no se encuentra
      */
     public Usuario buscarPorEmail(String email) {
-        // Busca y retorna el usuario por su correo
         return usuarioRepository.findByCorreo(email);
     }
 
     /**
-     * Valida el formato del correo y la contraseña del usuario.
+     * Valida el formato del correo y la contraseña proporcionados.
      *
-     * @param correo El correo electrónico a validar.
-     * @param password La contraseña a validar.
+     * @param correo el correo electrónico a validar
+     * @param password la contraseña a validar
      */
     private void validarCorreoYContraseña(String correo, String password) {
-        // Verifica si el correo ya está registrado
+        // Verifica si el correo ya está registrado.
         if (usuarioRepository.existsByCorreo(correo)) {
             throw new RuntimeException("El correo ya está registrado");
         }
-        // Verifica el formato del correo con la expresión regular
+        // Verifica el formato del correo electrónico usando la expresión regular.
         if (!Pattern.matches(emailRegex, correo)) {
             throw new IllegalArgumentException("Formato de correo electrónico inválido");
         }
-        // Verifica el formato de la contraseña con la expresión regular
+        // Verifica el formato de la contraseña usando la expresión regular.
         if (!Pattern.matches(passwordRegex, password)) {
             throw new IllegalArgumentException("Formato de contraseña inválido");
         }
     }
 
     /**
-     * Construye un objeto CreateResponseDTO a partir de una entidad Usuario.
+     * Construye un DTO de respuesta a partir de un objeto Usuario.
      *
-     * @param usuario El usuario del cual se construirá el DTO.
-     * @return Un objeto CreateResponseDTO con los detalles del usuario.
+     * @param usuario el usuario del que construir el DTO
+     * @return un objeto CreateResponseDTO que representa al usuario
      */
     private CreateResponseDTO construirResponseDTO(Usuario usuario) {
-        // Construye y retorna un DTO de respuesta basado en la entidad Usuario
         return CreateResponseDTO.builder()
                 .id(usuario.getId())
                 .nombre(usuario.getNombre())
